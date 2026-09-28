@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Roblox Gift Cards Roulette</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #09090b; /* Very dark background */
+            margin: 0;
+            overflow: hidden;
+            color: white;
+        }
+
+        /* Roulette Carousel Styles */
+        .roulette-container {
+            position: relative;
+            width: 100%;
+            height: 230px; /* Увеличил высоту контейнера */
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .roulette-track {
+            display: flex;
+            height: 100%;
+            /* The translation will be handled by JS */
+            transition: transform 0s linear; 
+        }
+
+        .gift-card {
+            flex: 0 0 160px; /* Fixed width for each card */
+            margin: 0 8px;
+            /* Убрал градиент, бордер и паддинг, чтобы картинка была на 100% */
+            background: transparent;
+            border: none;
+            padding: 0; 
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* The selector/pointer in the middle */
+        .selector-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 172px; /* slightly larger than card */
+            height: 242px; /* Увеличил высоту рамки */
+            border: 3px solid white;
+            border-radius: 16px;
+            z-index: 10;
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3), inset 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+        
+        /* White arrows for selector */
+        .selector-box::before, .selector-box::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+        }
+        .selector-box::before {
+            top: -15px;
+            border-top: 15px solid white;
+        }
+        .selector-box::after {
+            bottom: -15px;
+            border-bottom: 15px solid white;
+        }
+
+        /* Testimonials horizontal scroll */
+        .testimonials-container {
+            display: flex;
+            overflow-x: auto;
+            gap: 12px;
+            padding: 20px;
+            scrollbar-width: none; /* Firefox */
+        }
+        .testimonials-container::-webkit-scrollbar {
+            display: none; /* Chrome/Safari */
+        }
+
+        .testimonial-card {
+            flex: 0 0 280px;
+            background-color: #18181b;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #27272a;
+        }
+
+        /* Winning Overlay */
+        .win-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+        
+        .win-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .win-card-display {
+            width: 240px;
+            /* Убраны background, border, padding */
+            transform: scale(0.8) translateY(50px);
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-align: center;
+        }
+
+        .win-overlay.active .win-card-display {
+            transform: scale(1) translateY(0);
+        }
+        
+        /* Свечение для самой картинки */
+        .win-card-display img {
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(255, 255, 255, 0.3);
+        }
+
+        /* Loading spinner */
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="flex justify-center h-screen">
+
+    <div class="w-full max-w-[400px] h-full bg-[#09090b] relative flex flex-col">
+        
+        <!-- Header -->
+        <header class="flex justify-between items-center px-4 py-5 border-b border-gray-800">
+            <button class="flex items-center text-white font-bold text-lg">
+                <svg class="w-6 h-6 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+                Back
+            </button>
+            <div class="text-center">
+                <h1 class="text-white font-black text-xl leading-none">Robux gift cards</h1>
+                <span class="text-gray-400 text-xs">mini-application</span>
+            </div>
+            <!-- Roblox Hex Logo -->
+            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center rotate-45">
+                 <div class="w-4 h-4 bg-[#09090b] rotate-[-45deg] rounded-sm"></div>
+            </div>
+        </header>
+
+        <!-- MAIN ROULETTE AREA -->
+        <div class="roulette-container" id="roulette-container">
+            <div class="selector-box"></div>
+            <div class="roulette-track" id="roulette-track">
+            </div>
+        </div>
+
+        <!-- Spin Button -->
+        <div class="px-6 mt-6">
+            <button id="spin-btn" class="w-full bg-[#27272a] hover:bg-[#3f3f46] border border-gray-600 text-white font-bold text-xl py-4 rounded-full flex justify-center items-center gap-3 transition-colors active:scale-95">
+                <span>Opening</span>
+                <svg id="btn-spinner" class="w-6 h-6 spinner hidden" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Убрали div с классом flex-1, который создавал огромную пустоту -->
+
+        <!-- Testimonials -->
+        <div class="mt-6">
+            <div class="px-4 flex items-center gap-2 mb-2">
+                <svg class="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Player Testimonial</h3>
+            </div>
+            
+            <div class="testimonials-container">
+                <!-- Card 1 -->
+                <div class="testimonial-card">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <img src="https://i.ibb.co/bgZ7YjNK/skin1.jpg" alt="GamerApex" class="w-8 h-8 rounded-full object-cover">
+                            <span class="font-bold text-blue-400">GamerApex_07 <svg class="w-3 h-3 inline text-blue-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-300 leading-relaxed mb-3">Got my Roblox Gift Card and it's absolutely perfect! The process was super fast and easy. Already redeemed it for Robux.</p>
+                    <div class="flex justify-between items-center text-[10px] text-gray-500">
+                        <div class="flex text-yellow-500">⭐⭐⭐⭐⭐ 5/5 STARS</div>
+                        <div>Received: 09/24/2026</div>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="testimonial-card">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <img src="https://i.ibb.co/WWxG87mT/skin2.jpg" alt="StarlightLuna" class="w-8 h-8 rounded-full object-cover">
+                            <span class="font-bold text-purple-400">StarlightLuna <svg class="w-3 h-3 inline text-blue-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-300 leading-relaxed mb-3">Just received this Roblox Gift Card as a surprise! It's amazing. Got the code and redeemed it instantly.</p>
+                    <div class="flex justify-between items-center text-[10px] text-gray-500">
+                        <div class="flex text-yellow-500">⭐⭐⭐⭐⭐ 5/5 STARS</div>
+                        <div>Received: 09/25/2026</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Нижнее меню (Bottom Nav) -->
+        <nav class="relative z-20 mx-4 mb-6 mt-auto bg-[#18181b] rounded-[32px] py-4 px-6 flex justify-between items-center text-gray-400 shadow-[0_10px_30px_rgba(0,0,0,0.8)] border border-[#27272a]">
+            <!-- Home -->
+            <button class="text-white hover:text-gray-300 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+            </button>
+            <!-- Play -->
+            <button class="hover:text-white transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </button>
+            <!-- Avatar (Центральная кнопка) -->
+            <button class="w-8 h-8 rounded-full overflow-hidden border border-gray-400 hover:border-white transition-colors">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSjXjau74vA5S8ZsakvDajX520_MHqXjAFjoyULX7ummg&s=10" alt="Avatar" class="w-full h-full object-cover">
+            </button>
+            <!-- Chat -->
+            <button class="hover:text-white transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            </button>
+            <!-- More -->
+            <button class="hover:text-white transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"></path></svg>
+            </button>
+
+            <!-- White indicator line at the bottom -->
+            <div class="absolute bottom-1.5 left-1/2 transform -translate-x-1/2 w-20 h-1 bg-gray-200 rounded-full"></div>
+        </nav>
+
+        <!-- Winning Overlay -->
+        <div id="win-overlay" class="win-overlay">
+            <h2 class="text-white font-black text-3xl mb-8 tracking-wide uppercase">Digital Gift Card</h2>
+            
+            <div class="win-card-display">
+                <!-- Оставлена ТОЛЬКО картинка, без оберток с фонами -->
+                <img id="win-card-img" src="" class="w-full h-auto object-contain" alt="Roblox">
+            </div>
+            
+            <button id="claim-prize-btn" class="mt-8 bg-[#00b06f] text-white font-bold text-xl py-4 px-12 rounded-full shadow-[0_0_20px_rgba(0,176,111,0.5)] active:scale-95 transition-transform">
+                Claim Now
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        const track = document.getElementById('roulette-track');
+        const spinBtn = document.getElementById('spin-btn');
+        const btnSpinner = document.getElementById('btn-spinner');
+        const winOverlay = document.getElementById('win-overlay');
+        const winCardImg = document.getElementById('win-card-img');
+        
+        // Уникальные ключи для карточек
+        const cardKeys = [1, 2, 3, 4, 5];
+        
+        // Ссылки на картинки, которые вы прислали
+        const cardImages = {
+            1: 'https://i.ibb.co/KxTb4Wqn/rob1.jpg',
+            2: 'https://i.ibb.co/Lh1PX6XN/rob2.jpg',
+            3: 'https://i.ibb.co/mFFhsB94/rob3.jpg',
+            4: 'https://i.ibb.co/N2hDN9T6/rob4.jpg',
+            5: 'https://i.ibb.co/HDyMstrr/rob5.jpg'
+        };
+        
+        const cardWidth = 160;
+        const cardMargin = 16; // 8px on each side
+        const itemWidth = cardWidth + cardMargin; 
+        
+        let isSpinning = false;
+        let cards = [];
+
+        // Generate a long list of cards for the track (loop effect)
+        function generateCards() {
+            for (let i = 0; i < 50; i++) {
+                const amount = cardKeys[Math.floor(Math.random() * cardKeys.length)];
+                const imgSrc = cardImages[amount];
+                
+                const card = document.createElement('div');
+                card.className = 'gift-card';
+                // Карточка состоит только из картинки, растянутой на 100% высоты и ширины
+                card.innerHTML = `
+                    <img src="${imgSrc}" class="w-full h-full object-cover rounded-xl" style="display: block;" alt="Robux">
+                `;
+                
+                // Keep track of the amount for the winning logic
+                card.dataset.amount = amount;
+                card.dataset.img = imgSrc;
+                track.appendChild(card);
+                cards.push(card);
+            }
+        }
+
+        generateCards();
+
+        // Initial offset to center the track
+        // The container is ~400px wide. Center is at 200px.
+        // Item is 176px wide. Center of item is 88px.
+        // Offset to center the first item: 200 - 88 = 112px
+        const initialOffset = (document.getElementById('roulette-container').offsetWidth / 2) - (itemWidth / 2);
+        track.style.transform = `translateX(${initialOffset}px)`;
+
+        spinBtn.addEventListener('click', () => {
+            if (isSpinning) return;
+            isSpinning = true;
+            
+            // UI changes for button
+            spinBtn.querySelector('span').textContent = 'Opening...';
+            btnSpinner.classList.remove('hidden');
+
+            // Determine winner card index (pick a card near the end of the track)
+            const winnerIndex = 40 + Math.floor(Math.random() * 5); // Pick between 40 and 44
+            const winnerAmount = cards[winnerIndex].dataset.amount;
+
+            // Calculate target position
+            // We want the winner card to be in the center.
+            // Distance to move = winnerIndex * itemWidth
+            // Then subtract initialOffset so it aligns perfectly in the selector box.
+            
+            // Add a slight random offset so it doesn't land perfectly centered every time (makes it look real)
+            const randomJiggle = Math.floor(Math.random() * 60) - 30; 
+            
+            const targetTranslate = -(winnerIndex * itemWidth) + initialOffset + randomJiggle;
+
+            // Apply transition and transform
+            track.style.transition = 'transform 4s cubic-bezier(0.1, 0.7, 0.1, 1)';
+            track.style.transform = `translateX(${targetTranslate}px)`;
+
+            // Wait for spin to finish
+            setTimeout(() => {
+                // Show win overlay - показываем только картинку
+                winCardImg.src = cards[winnerIndex].dataset.img;
+                winOverlay.classList.add('active');
+                
+                // Fire confetti
+                var duration = 3000;
+                var animationEnd = Date.now() + duration;
+                var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+
+                var interval = setInterval(function() {
+                    var timeLeft = animationEnd - Date.now();
+                    if (timeLeft <= 0) return clearInterval(interval);
+                    var particleCount = 50 * (timeLeft / duration);
+                    confetti(Object.assign({}, defaults, { 
+                        particleCount,
+                        origin: { x: 0.5, y: 0.5 } 
+                    }));
+                }, 250);
+
+                // Reset button (though they will likely claim and leave)
+                spinBtn.querySelector('span').textContent = 'Open Another';
+                btnSpinner.classList.add('hidden');
+                isSpinning = false;
+
+            }, 4500); // 4 seconds animation + 0.5 buffer
+        });
+
+        // Claim button logic
+        document.getElementById('claim-prize-btn').addEventListener('click', function() {
+            // Меняем вид кнопки
+            this.textContent = 'Claimed!';
+            this.classList.remove('bg-[#00b06f]', 'active:scale-95');
+            this.classList.add('bg-gray-600');
+            this.style.pointerEvents = 'none';
+
+            // Запускаем конфетти
+            var duration = 3000;
+            var animationEnd = Date.now() + duration;
+            var defaults = { startVelocity: 45, spread: 360, ticks: 60, zIndex: 100 };
+
+            var interval = setInterval(function() {
+                var timeLeft = animationEnd - Date.now();
+                if (timeLeft <= 0) return clearInterval(interval);
+                var particleCount = 50 * (timeLeft / duration);
+                
+                // Левый залп
+                confetti(Object.assign({}, defaults, { 
+                    particleCount,
+                    origin: { x: 0.2, y: 0.6 } 
+                }));
+                // Правый залп
+                confetti(Object.assign({}, defaults, { 
+                    particleCount,
+                    origin: { x: 0.8, y: 0.6 } 
+                }));
+            }, 250);
+        });
+
+    </script>
+</body>
+</html>
